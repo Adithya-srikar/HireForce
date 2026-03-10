@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HireForce PreScreen</title>
+<script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07070d;--surface:#10111a;--surface2:#181a27;--border:#252839;
+  --text:#e4e6f0;--text2:#8b8fa8;--accent:#6366f1;--accent2:#818cf8;
+  --green:#22c55e;--yellow:#eab308;--red:#ef4444;--orange:#f97316;
+  --blue:#3b82f6;--cyan:#06b6d4;--purple:#a855f7;
+  --radius:12px;--transition:.25s cubic-bezier(.4,0,.2,1);
+}
+html{font-size:15px;scroll-behavior:smooth}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+
+/* ---------- HEADER ---------- */
+header{padding:1.4rem 2rem;display:flex;align-items:center;gap:.8rem;border-bottom:1px solid var(--border);background:rgba(16,17,26,.85);backdrop-filter:blur(12px);position:sticky;top:0;z-index:50}
+header .logo{font-size:1.35rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+header .tag{font-size:.7rem;padding:.15rem .55rem;border-radius:20px;background:var(--accent);color:#fff;font-weight:600;letter-spacing:.03em}
+header .spacer{flex:1}
+header a{color:var(--text2);text-decoration:none;font-size:.85rem;transition:color var(--transition)}
+header a:hover{color:var(--accent2)}
+
+/* ---------- LAYOUT ---------- */
+.container{max-width:1200px;margin:0 auto;padding:2rem 1.5rem}
+section{margin-bottom:2.5rem}
+h2{font-size:1.25rem;font-weight:600;margin-bottom:1rem;color:var(--text)}
+h3{font-size:1rem;font-weight:600;margin-bottom:.6rem}
+
+/* ---------- CARDS ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;transition:border-color var(--transition)}
+.card:hover{border-color:var(--accent)}
+
+/* ---------- UPLOAD SECTION ---------- */
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start}
+@media(max-width:720px){.upload-grid{grid-template-columns:1fr}}
+
+.drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:2.5rem 1.5rem;text-align:center;cursor:pointer;transition:all var(--transition);background:var(--surface)}
+.drop-zone:hover,.drop-zone.active{border-color:var(--accent);background:rgba(99,102,241,.06)}
+.drop-zone .icon{font-size:2.2rem;margin-bottom:.5rem;opacity:.5}
+.drop-zone p{color:var(--text2);font-size:.88rem}
+.drop-zone .file-name{margin-top:.6rem;font-size:.82rem;color:var(--accent2);font-weight:500}
+
+.url-inputs{display:flex;flex-direction:column;gap:1rem}
+.input-group{position:relative}
+.input-group label{display:block;font-size:.78rem;font-weight:600;color:var(--text2);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.05em}
+.input-group input{width:100%;padding:.65rem .85rem .65rem 2.4rem;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:.88rem;outline:none;transition:border-color var(--transition)}
+.input-group input:focus{border-color:var(--accent)}
+.input-group .prefix{position:absolute;left:.75rem;top:calc(50% + .4rem);transform:translateY(-50%);font-size:.85rem;opacity:.4}
+
+.btn-analyze{display:flex;align-items:center;justify-content:center;gap:.5rem;width:100%;padding:.85rem;border:none;border-radius:var(--radius);background:linear-gradient(135deg,var(--accent),#4f46e5);color:#fff;font-size:1rem;font-weight:600;cursor:pointer;transition:all var(--transition);margin-top:.5rem}
+.btn-analyze:hover{opacity:.9;transform:translateY(-1px)}
+.btn-analyze:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* ---------- LOADING ---------- */
+.loader-overlay{display:none;position:fixed;inset:0;background:rgba(7,7,13,.82);backdrop-filter:blur(6px);z-index:100;flex-direction:column;align-items:center;justify-content:center;gap:1.2rem}
+.loader-overlay.show{display:flex}
+.spinner{width:48px;height:48px;border:4px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-overlay p{color:var(--text2);font-size:.95rem;animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+/* ---------- ERROR ---------- */
+.error-msg{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:.8rem 1rem;color:var(--red);font-size:.88rem;display:none;margin-bottom:1rem}
+.error-msg.show{display:block}
+
+/* ---------- RESULTS ---------- */
+#results{display:none}
+#results.show{display:block}
+
+.scores-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.8rem}
+@media(max-width:600px){.scores-row{grid-template-columns:repeat(2,1fr)}}
+.score-card{text-align:center;padding:1.2rem .8rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+.score-card .value{font-size:2rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.score-card .label{font-size:.75rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-top:.2rem}
+
+.platforms{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.2rem;margin-bottom:2rem}
+.platform-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.3rem;overflow:hidden}
+.platform-card h3{display:flex;align-items:center;gap:.5rem}
+.platform-card .badge{font-size:.72rem;padding:.1rem .5rem;border-radius:10px;font-weight:600}
+.platform-card.gh .badge{background:rgba(34,197,94,.15);color:var(--green)}
+.platform-card.lc .badge{background:rgba(234,179,8,.15);color:var(--yellow)}
+.platform-card.li .badge{background:rgba(59,130,246,.15);color:var(--blue)}
+.stat-row{display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.85rem}
+.stat-row:last-child{border:none}
+.stat-row .k{color:var(--text2)}
+.stat-row .v{font-weight:600}
+
+.repo-list{list-style:none;margin-top:.6rem}
+.repo-list li{padding:.45rem 0;border-bottom:1px solid var(--border);font-size:.84rem}
+.repo-list li:last-child{border:none}
+.repo-list .repo-name{font-weight:600;color:var(--accent2)}
+.repo-list .repo-meta{color:var(--text2);font-size:.78rem}
+
+.lang-tags{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+.lang-tag{font-size:.74rem;padding:.15rem .55rem;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text2)}
+
+.diff-bars{margin-top:.6rem}
+.diff-bar{display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem;font-size:.84rem}
+.diff-bar .bar{flex:1;height:8px;border-radius:4px;background:var(--surface2);overflow:hidden}
+.diff-bar .bar .fill{height:100%;border-radius:4px;transition:width .6s ease}
+.diff-bar.easy .fill{background:var(--green)}
+.diff-bar.medium .fill{background:var(--yellow)}
+.diff-bar.hard .fill{background:var(--red)}
+.diff-bar .count{min-width:32px;text-align:right;font-weight:600}
+
+/* ---------- GRAPH ---------- */
+#graph-container{width:100%;height:520px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:2rem}
+
+/* ---------- ANALYSIS ---------- */
+.analysis-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:1.5rem}
+.analysis-section h3{margin-bottom:.8rem}
+.pill-list{display:flex;flex-wrap:wrap;gap:.45rem;margin-bottom:.8rem}
+.pill{font-size:.8rem;padding:.25rem .7rem;border-radius:20px;background:rgba(99,102,241,.12);color:var(--accent2);border:1px solid rgba(99,102,241,.2)}
+.pill.warn{background:rgba(234,179,8,.1);color:var(--yellow);border-color:rgba(234,179,8,.2)}
+
+.question-list{list-style:none;counter-reset:q}
+.question-list li{counter-increment:q;padding:.7rem 0;border-bottom:1px solid var(--border);font-size:.88rem}
+.question-list li:last-child{border:none}
+.question-list li::before{content:"Q" counter(q);font-size:.72rem;font-weight:700;color:var(--accent);margin-right:.5rem;background:rgba(99,102,241,.12);padding:.1rem .4rem;border-radius:4px}
+.question-list .q-context{display:block;font-size:.78rem;color:var(--text2);margin-top:.2rem;margin-left:2.2rem}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">HireForce</div>
+  <div class="spacer"></div>
+</header>
+
+<div class="container">
+
+  <!-- ERROR -->
+  <div class="error-msg" id="error"></div>
+
+  <!-- UPLOAD SECTION -->
+  <section>
+    <h2>Candidate Analysis</h2>
+    <form id="form" enctype="multipart/form-data">
+      <div class="upload-grid">
+        <div>
+          <div class="drop-zone" id="dropZone">
+            <div class="icon">&#128196;</div>
+            <p>Drop resume PDF here or <strong>click to browse</strong></p>
+            <div class="file-name" id="fileName"></div>
+          </div>
+          <input type="file" id="fileInput" name="resume" accept=".pdf" hidden>
+        </div>
+        <div class="url-inputs">
+          <div class="input-group">
+            <label>GitHub URL</label>
+            <span class="prefix">&#9679;</span>
+            <input type="url" name="github_url" placeholder="https://github.com/username">
+          </div>
+          <div class="input-group">
+            <label>LeetCode URL</label>
+            <span class="prefix">&#9679;</span>
+            <input type="url" name="leetcode_url" placeholder="https://leetcode.com/u/username">
+          </div>
+          <div class="input-group">
+            <label>LinkedIn URL</label>
+            <span class="prefix">&#9679;</span>
+            <input type="url" name="linkedin_url" placeholder="https://linkedin.com/in/username">
+          </div>
+        </div>
+      </div>
+      <button class="btn-analyze" type="submit" id="btnAnalyze">Analyze Candidate</button>
+    </form>
+  </section>
+
+  <!-- RESULTS -->
+  <div id="results">
+    <section>
+      <h2>Evaluation Scores</h2>
+      <div class="scores-row" id="scores"></div>
+    </section>
+
+    <section>
+      <h2>Platform Data</h2>
+      <div class="platforms" id="platforms"></div>
+    </section>
+
+    <section>
+      <h2>Knowledge Graph</h2>
+      <div id="graph-container"></div>
+    </section>
+
+    <section id="analysisSection">
+      <h2>Agent Analysis</h2>
+      <div id="analysisContent"></div>
+    </section>
+
+    <section style="margin-top:1.5rem;padding:1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);text-align:center">
+      <p style="margin-bottom:1rem;color:var(--text2)">Prescreen complete. Next: paste job, set interview time, generate questions, then take the interview.</p>
+      <a id="nextStepLink" href="/paste-job-interview" class="btn-analyze" style="display:inline-flex;text-decoration:none;width:auto;padding:.75rem 1.5rem">Continue to Job Interview →</a>
+    </section>
+  </div>
+</div>
+
+<!-- LOADING OVERLAY -->
+<div class="loader-overlay" id="loader">
+  <div class="spinner"></div>
+  <p id="loaderText">Fetching candidate data…</p>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const dropZone = $('#dropZone');
+const fileInput = $('#fileInput');
+const form = $('#form');
+const loader = $('#loader');
+const loaderText = $('#loaderText');
+const errorEl = $('#error');
+const resultsEl = $('#results');
+
+/* ---------- File Upload ---------- */
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('active'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('active'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('active');
+  if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; showFileName(); }
+});
+fileInput.addEventListener('change', showFileName);
+function showFileName() {
+  const name = fileInput.files[0]?.name;
+  $('#fileName').textContent = name || '';
+}
+
+/* ---------- Form Submit ---------- */
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  errorEl.classList.remove('show');
+  resultsEl.classList.remove('show');
+
+  const fd = new FormData(form);
+  if (fileInput.files[0]) fd.set('resume', fileInput.files[0]);
+
+  const btn = $('#btnAnalyze');
+  btn.disabled = true;
+  loader.classList.add('show');
+
+  const steps = [
+    'Parsing resume…', 'Fetching GitHub data…', 'Fetching LeetCode stats…',
+    'Querying LinkedIn…', 'Building knowledge graph…', 'Running AI analysis…'
+  ];
+  let si = 0;
+  const iv = setInterval(() => { si = Math.min(si + 1, steps.length - 1); loaderText.textContent = steps[si]; }, 3200);
+
+  try {
+    const resp = await fetch('/api/analyze', { method: 'POST', body: fd });
+    clearInterval(iv);
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || 'Analysis failed');
+    }
+    const data = await resp.json();
+    renderResults(data);
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.add('show');
+  } finally {
+    loader.classList.remove('show');
+    btn.disabled = false;
+  }
+});
+
+/* ---------- Render ---------- */
+function renderResults(data) {
+  renderScores(data.analysis?.score || {});
+  renderPlatforms(data);
+  renderGraph(data.graph);
+  renderAnalysis(data.analysis);
+  var link = $('#nextStepLink');
+  if (data.prescreen_id && link) link.href = '/paste-job-interview?prescreen_id=' + encodeURIComponent(data.prescreen_id);
+  resultsEl.classList.add('show');
+  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderScores(score) {
+  const hasScores = score && Object.values(score).some(v => v > 0);
+  const container = $('#scores').parentElement;
+  if (!hasScores) { container.style.display = 'none'; return; }
+  container.style.display = '';
+  const items = [
+    { key: 'technical_skills', label: 'Technical' },
+    { key: 'project_quality', label: 'Projects' },
+    { key: 'problem_solving', label: 'Problem Solving' },
+    { key: 'overall', label: 'Overall' },
+  ];
+  $('#scores').innerHTML = items.map(i => `
+    <div class="score-card">
+      <div class="value">${score[i.key] ?? '—'}<span style="font-size:.9rem;opacity:.5">/10</span></div>
+      <div class="label">${i.label}</div>
+    </div>`).join('');
+}
+
+function renderPlatforms(data) {
+  let html = '';
+
+  /* GitHub */
+  const gh = data.github;
+  if (gh && !gh.error && gh.username) {
+    const langs = Object.entries(gh.languages || {}).sort((a,b) => b[1]-a[1]);
+    const repos = (gh.repos || []).slice(0, 5);
+    html += `<div class="platform-card gh card">
+      <h3><span class="badge">GitHub</span> ${gh.name || gh.username}</h3>
+      <div class="stat-row"><span class="k">Repos</span><span class="v">${gh.public_repos}</span></div>
+      <div class="stat-row"><span class="k">Stars</span><span class="v">${gh.total_stars}</span></div>
+      <div class="stat-row"><span class="k">Followers</span><span class="v">${gh.followers}</span></div>
+      ${gh.bio ? `<div class="stat-row"><span class="k">Bio</span><span class="v" style="text-align:right;max-width:60%">${esc(gh.bio)}</span></div>` : ''}
+      <div class="lang-tags">${langs.map(([l,c]) => `<span class="lang-tag">${l} (${c})</span>`).join('')}</div>
+      ${repos.length ? `<ul class="repo-list">${repos.map(r => `<li><span class="repo-name">${esc(r.name)}</span> <span class="repo-meta">★${r.stars} · ${r.language || '—'}</span><br><span class="repo-meta">${esc(r.description || '')}</span></li>`).join('')}</ul>` : ''}
+    </div>`;
+  }
+
+  /* LeetCode */
+  const lc = data.leetcode;
+  if (lc && !lc.error && lc.username) {
+    const max = Math.max(lc.easy_solved, lc.medium_solved, lc.hard_solved, 1);
+    html += `<div class="platform-card lc card">
+      <h3><span class="badge">LeetCode</span> ${lc.username}</h3>
+      <div class="stat-row"><span class="k">Total Solved</span><span class="v">${lc.total_solved} / ${lc.total_questions || '—'}</span></div>
+      <div class="stat-row"><span class="k">Ranking</span><span class="v">${lc.ranking ? '#'+lc.ranking.toLocaleString() : '—'}</span></div>
+      ${lc.contribution_points ? `<div class="stat-row"><span class="k">Contribution</span><span class="v">${lc.contribution_points.toLocaleString()} pts</span></div>` : ''}
+      ${lc.active_days ? `<div class="stat-row"><span class="k">Active Days</span><span class="v">${lc.active_days}</span></div>` : ''}
+      <div class="diff-bars">
+        <div class="diff-bar easy"><span style="width:55px">Easy</span><div class="bar"><div class="fill" style="width:${(lc.easy_solved/(lc.total_easy||1)*100).toFixed(0)}%"></div></div><span class="count">${lc.easy_solved}/${lc.total_easy||'?'}</span></div>
+        <div class="diff-bar medium"><span style="width:55px">Medium</span><div class="bar"><div class="fill" style="width:${(lc.medium_solved/(lc.total_medium||1)*100).toFixed(0)}%"></div></div><span class="count">${lc.medium_solved}/${lc.total_medium||'?'}</span></div>
+        <div class="diff-bar hard"><span style="width:55px">Hard</span><div class="bar"><div class="fill" style="width:${(lc.hard_solved/(lc.total_hard||1)*100).toFixed(0)}%"></div></div><span class="count">${lc.hard_solved}/${lc.total_hard||'?'}</span></div>
+      </div>
+      ${lc.recent_submissions?.length ? `<h3 style="margin-top:.8rem;font-size:.82rem;color:var(--text2)">Recent Submissions</h3><ul class="repo-list">${lc.recent_submissions.slice(0,5).map(s => `<li><span class="repo-name">${esc(s.title)}</span> <span class="repo-meta">${s.status} · ${s.language}</span></li>`).join('')}</ul>` : ''}
+    </div>`;
+  }
+
+  /* LinkedIn */
+  const li = data.linkedin;
+  if (li && !li.error && li.username) {
+    const exps = li.experiences || [];
+    const edus = li.education || [];
+    const skills = li.skills || [];
+    const projects = li.projects || [];
+    const hashtags = li.hashtags || [];
+    const badges = [li.is_creator && 'Creator', li.is_influencer && 'Influencer', li.is_premium && 'Premium'].filter(Boolean);
+
+    html += `<div class="platform-card li card">
+      <h3><span class="badge">LinkedIn</span> ${esc(li.name || li.username)} ${badges.map(b => `<span class="lang-tag" style="font-size:.65rem;margin-left:.3rem">${b}</span>`).join('')}</h3>
+      ${li.headline ? `<div class="stat-row"><span class="k">Headline</span><span class="v" style="text-align:right;max-width:65%">${esc(li.headline)}</span></div>` : ''}
+      ${li.current_company ? `<div class="stat-row"><span class="k">Company</span><span class="v">${esc(li.current_company)}</span></div>` : ''}
+      ${li.location ? `<div class="stat-row"><span class="k">Location</span><span class="v">${esc(li.location)}</span></div>` : ''}
+      ${li.followers ? `<div class="stat-row"><span class="k">Followers</span><span class="v">${li.followers.toLocaleString()}</span></div>` : ''}
+      ${li.connections ? `<div class="stat-row"><span class="k">Connections</span><span class="v">${li.connections.toLocaleString()}</span></div>` : ''}
+      ${li.summary ? `<p style="margin:.6rem 0;font-size:.84rem;color:var(--text2)">${esc(li.summary.slice(0,300))}</p>` : ''}
+      ${exps.length ? `<h3 style="margin-top:.8rem;font-size:.82rem;color:var(--text2)">Experience</h3><ul class="repo-list">${exps.slice(0,5).map(e => `<li><span class="repo-name">${esc(e.title||'')}</span> <span class="repo-meta">${esc(e.company||'')}${e.duration ? ' · '+esc(e.duration) : ''}</span>${e.description ? `<br><span class="repo-meta">${esc(e.description.slice(0,150))}</span>` : ''}</li>`).join('')}</ul>` : ''}
+      ${edus.length ? `<h3 style="margin-top:.8rem;font-size:.82rem;color:var(--text2)">Education</h3><ul class="repo-list">${edus.slice(0,3).map(e => `<li><span class="repo-name">${esc(e.school||'')}</span> <span class="repo-meta">${[e.degree,e.field,e.duration].filter(Boolean).map(esc).join(' · ')}</span></li>`).join('')}</ul>` : ''}
+      ${skills.length ? `<h3 style="margin-top:.8rem;font-size:.82rem;color:var(--text2)">Skills</h3><div class="lang-tags">${skills.slice(0,15).map(s => `<span class="lang-tag">${esc(typeof s==='string'?s:s.name||'')}</span>`).join('')}</div>` : ''}
+      ${projects.length ? `<h3 style="margin-top:.8rem;font-size:.82rem;color:var(--text2)">Projects</h3><ul class="repo-list">${projects.slice(0,4).map(p => `<li><span class="repo-name">${esc(p.title||'')}</span>${p.description ? ` <span class="repo-meta">${esc(p.description.slice(0,120))}</span>` : ''}</li>`).join('')}</ul>` : ''}
+      ${hashtags.length ? `<div class="lang-tags" style="margin-top:.6rem">${hashtags.map(h => `<span class="lang-tag">${esc(h)}</span>`).join('')}</div>` : ''}
+      <div class="stat-row" style="margin-top:.6rem"><span class="k">Profile</span><span class="v"><a href="${li.profile_url}" target="_blank" style="color:var(--blue)">View on LinkedIn</a></span></div>
+    </div>`;
+  }
+
+  /* Errors — only show if a URL was actually provided */
+  const urlMap = { github: data.urls?.github, leetcode: data.urls?.leetcode, linkedin: data.urls?.linkedin };
+  for (const [key, val] of Object.entries(data)) {
+    if (['github','leetcode','linkedin'].includes(key) && val?.error && urlMap[key]) {
+      html += `<div class="platform-card card"><h3 style="color:var(--text2)">${key}</h3><p style="font-size:.85rem;color:var(--red)">${esc(val.error)}</p></div>`;
+    }
+  }
+
+  $('#platforms').innerHTML = html;
+}
+
+function renderGraph(graph) {
+  if (!graph?.nodes?.length) { $('#graph-container').innerHTML = '<p style="padding:2rem;text-align:center;color:var(--text2)">No graph data</p>'; return; }
+
+  const colors = {
+    candidate: { background: '#eab308', border: '#ca8a04', font: { color: '#000' } },
+    github:    { background: '#22c55e', border: '#16a34a', font: { color: '#000' } },
+    leetcode:  { background: '#f97316', border: '#ea580c', font: { color: '#000' } },
+    linkedin:  { background: '#3b82f6', border: '#2563eb', font: { color: '#fff' } },
+    skill:     { background: '#6366f1', border: '#4f46e5', font: { color: '#fff' } },
+    repo:      { background: '#1e293b', border: '#334155', font: { color: '#e2e8f0' } },
+    topic:     { background: '#1e1e2e', border: '#3b3b5c', font: { color: '#a5b4fc' } },
+    stats:     { background: '#1e293b', border: '#475569', font: { color: '#94a3b8' } },
+    lc_total:  { background: '#f97316', border: '#c2410c', font: { color: '#000' } },
+    lc_easy:   { background: '#22c55e', border: '#15803d', font: { color: '#000' } },
+    lc_medium: { background: '#eab308', border: '#a16207', font: { color: '#000' } },
+    lc_hard:   { background: '#ef4444', border: '#b91c1c', font: { color: '#fff' } },
+    experience:{ background: '#8b5cf6', border: '#7c3aed', font: { color: '#fff' } },
+    info:      { background: '#1e293b', border: '#334155', font: { color: '#94a3b8' } },
+  };
+
+  const nodes = new vis.DataSet(graph.nodes.map(n => ({
+    ...n,
+    shape: n.group === 'candidate' ? 'diamond' : (n.group === 'repo' ? 'box' : 'dot'),
+    color: colors[n.group] || colors.topic,
+    font: { ...(colors[n.group]?.font || { color: '#e2e8f0' }), size: Math.max(10, n.size * 0.7) },
+  })));
+
+  const edges = new vis.DataSet(graph.edges.map(e => ({
+    ...e,
+    color: { color: '#334155', highlight: '#6366f1' },
+    font: { color: '#64748b', size: 9, strokeWidth: 0 },
+    smooth: { type: 'continuous' },
+  })));
+
+  new vis.Network($('#graph-container'), { nodes, edges }, {
+    physics: { barnesHut: { gravitationalConstant: -4000, springLength: 140 }, stabilization: { iterations: 120 } },
+    interaction: { hover: true, tooltipDelay: 150 },
+    layout: { improvedLayout: true },
+  });
+}
+
+function renderAnalysis(a) {
+  if (!a) { $('#analysisSection').style.display = 'none'; return; }
+  $('#analysisSection').style.display = '';
+
+  let html = '';
+
+  if (a.overall_assessment) {
+    html += `<div class="analysis-section"><h3>Overall Assessment</h3><p style="font-size:.92rem;color:var(--text)">${esc(a.overall_assessment)}</p></div>`;
+  }
+  if (a.technical_depth) {
+    html += `<div class="analysis-section"><h3>Technical Depth</h3><p style="font-size:.9rem;color:var(--text2)">${esc(a.technical_depth)}</p></div>`;
+  }
+  if (a.strengths?.length) {
+    html += `<div class="analysis-section"><h3>Strengths</h3><div class="pill-list">${a.strengths.map(s => `<span class="pill">${esc(s)}</span>`).join('')}</div></div>`;
+  }
+  if (a.areas_to_explore?.length) {
+    html += `<div class="analysis-section"><h3>Areas to Explore</h3><div class="pill-list">${a.areas_to_explore.map(s => `<span class="pill warn">${esc(s)}</span>`).join('')}</div></div>`;
+  }
+  if (a.interview_questions?.length) {
+    html += `<div class="analysis-section"><h3>Suggested Interview Questions</h3><ol class="question-list">${a.interview_questions.map(q => `<li>${esc(q.question)}<span class="q-context">${esc(q.context || '')}</span></li>`).join('')}</ol></div>`;
+  }
+
+  $('#analysisContent').innerHTML = html;
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+</script>
+</body>
+</html>

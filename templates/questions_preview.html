@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interview Questions — HireForce</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07070d;--surface:#10111a;--surface2:#181a27;--border:#252839;
+  --text:#e4e6f0;--text2:#8b8fa8;--accent:#6366f1;--accent2:#818cf8;
+  --green:#22c55e;--radius:12px;--transition:.25s cubic-bezier(.4,0,.2,1);
+}
+html{font-size:15px}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+
+header{padding:1.4rem 2rem;display:flex;align-items:center;gap:.8rem;border-bottom:1px solid var(--border);background:rgba(16,17,26,.85);backdrop-filter:blur(12px)}
+header .logo{font-size:1.35rem;font-weight:700;background:linear-gradient(135deg,var(--accent),#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+header .spacer{flex:1}
+header a{color:var(--text2);text-decoration:none;font-size:.85rem}
+header a:hover{color:var(--accent2)}
+
+.container{max-width:800px;margin:0 auto;padding:2rem 1.5rem}
+h1{font-size:1.5rem;margin-bottom:.5rem}
+.sub{color:var(--text2);font-size:.9rem;margin-bottom:1.5rem}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:1.5rem}
+.card h2{font-size:1.1rem;margin-bottom:1rem}
+
+.question-list{list-style:none;counter-reset:q}
+.question-list li{counter-increment:q;padding:.8rem 0;border-bottom:1px solid var(--border);font-size:.9rem}
+.question-list li:last-child{border:none}
+.question-list li::before{content:"Q" counter(q);font-size:.72rem;font-weight:700;color:var(--accent);margin-right:.5rem;background:rgba(99,102,241,.12);padding:.15rem .5rem;border-radius:4px}
+.question-list .q-context{display:block;font-size:.8rem;color:var(--text2);margin-top:.35rem;margin-left:2.5rem}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.85rem 1.75rem;border:none;border-radius:var(--radius);font-size:1rem;font-weight:600;cursor:pointer;transition:all var(--transition);text-decoration:none;margin-top:.5rem}
+.btn-primary{background:linear-gradient(135deg,var(--green),#16a34a);color:#fff}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+
+.schedule-note{font-size:.85rem;color:var(--text2);margin-top:1rem;padding:.75rem;background:var(--surface2);border-radius:8px}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/paste-job-interview">← Back</a>
+  <div class="logo">HireForce</div>
+  <div class="spacer"></div>
+</header>
+
+<div class="container">
+  <h1>Generated Interview Questions</h1>
+  <p class="sub">Questions are tailored to the job description and the candidate's LinkedIn, GitHub & LeetCode context. At the end there will be one short coding question (max 5 min).</p>
+
+  <div class="card">
+    <h2>Questions (saved in DB)</h2>
+    <ul class="question-list" id="questionList">
+      <li>Loading…</li>
+    </ul>
+    <p class="schedule-note" id="scheduleNote"></p>
+    <a href="#" id="takeInterviewBtn" class="btn btn-primary">Take Interview</a>
+  </div>
+</div>
+<script>
+(function(){
+  var params = new URLSearchParams(location.search);
+  var interviewId = params.get('interview_id');
+  var listEl = document.getElementById('questionList');
+  var noteEl = document.getElementById('scheduleNote');
+  var btnEl = document.getElementById('takeInterviewBtn');
+
+  if (interviewId) {
+    btnEl.href = '/take-interview?interview_id=' + encodeURIComponent(interviewId);
+    fetch('/api/interviews/' + encodeURIComponent(interviewId))
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data.error) {
+          listEl.innerHTML = '<li>' + (data.error || 'Failed to load') + '</li>';
+          return;
+        }
+        var qs = data.questions || [];
+        var html = qs.map(function(q){
+          return '<li>' + (q.question || '') + ' <span class="q-context">' + (q.context || '') + '</span></li>';
+        }).join('');
+        html += '<li><strong>+ 1 easy coding question</strong> (in-editor, 5 min max)</li>';
+        listEl.innerHTML = html;
+        noteEl.textContent = 'Interview scheduled — ' + (data.interview_date || '') + ' ' + (data.interview_time || '');
+      })
+      .catch(function(){
+        listEl.innerHTML = '<li>Could not load questions.</li>';
+      });
+  } else {
+    listEl.innerHTML = '<li>No interview selected. Start from <a href="/">PreScreen</a> then paste job & generate questions.</li>';
+    noteEl.textContent = '';
+    btnEl.style.display = 'none';
+  }
+})();
+</script>
+</body>
+</html>

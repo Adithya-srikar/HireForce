@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paste Job & Set Interview — HireForce</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07070d;--surface:#10111a;--surface2:#181a27;--border:#252839;
+  --text:#e4e6f0;--text2:#8b8fa8;--accent:#6366f1;--accent2:#818cf8;
+  --green:#22c55e;--yellow:#eab308;--red:#ef4444;--radius:12px;--transition:.25s cubic-bezier(.4,0,.2,1);
+}
+html{font-size:15px}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+
+header{padding:1.4rem 2rem;display:flex;align-items:center;gap:.8rem;border-bottom:1px solid var(--border);background:rgba(16,17,26,.85);backdrop-filter:blur(12px)}
+header .logo{font-size:1.35rem;font-weight:700;background:linear-gradient(135deg,var(--accent),#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+header .spacer{flex:1}
+header a{color:var(--text2);text-decoration:none;font-size:.85rem}
+header a:hover{color:var(--accent2)}
+
+.container{max-width:900px;margin:0 auto;padding:2rem 1.5rem}
+h1{font-size:1.5rem;margin-bottom:.5rem}
+.sub{color:var(--text2);font-size:.9rem;margin-bottom:1.5rem}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:1.5rem}
+.card h2{font-size:1.1rem;margin-bottom:1rem}
+
+.input-group{margin-bottom:1rem}
+.input-group label{display:block;font-size:.78rem;font-weight:600;color:var(--text2);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.05em}
+.input-group textarea,.input-group input{width:100%;padding:.65rem .85rem;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:.88rem;outline:none;font-family:inherit}
+.input-group textarea{min-height:180px;resize:vertical}
+.input-group input:focus,.input-group textarea:focus{border-color:var(--accent)}
+
+.datetime-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:560px){.datetime-row{grid-template-columns:1fr}}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.75rem 1.5rem;border:none;border-radius:var(--radius);font-size:.95rem;font-weight:600;cursor:pointer;transition:all var(--transition);text-decoration:none}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#4f46e5);color:#fff}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/">← Back</a>
+  <div class="logo">HireForce</div>
+  <div class="spacer"></div>
+</header>
+
+<div class="container">
+  <h1>Paste Job & Set Interview</h1>
+  <p class="sub">Paste the job description and choose when the interview will take place. We'll generate tailored questions from the prescreen context.</p>
+
+  <form id="form">
+    <input type="hidden" id="prescreenId" name="prescreen_id">
+    <div class="card">
+      <h2>Job Description</h2>
+      <div class="input-group">
+        <label for="jobDescription">Paste full job description</label>
+        <textarea id="jobDescription" name="job_description" placeholder="Paste the complete job description here (requirements, responsibilities, tech stack, etc.)..."></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Interview Schedule</h2>
+      <div class="datetime-row">
+        <div class="input-group">
+          <label for="interviewDate">Date</label>
+          <input type="date" id="interviewDate" name="interview_date" required>
+        </div>
+        <div class="input-group">
+          <label for="interviewTime">Time</label>
+          <input type="time" id="interviewTime" name="interview_time" required>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-msg" id="error" style="display:none;margin-bottom:1rem;padding:.75rem;background:rgba(239,68,68,.1);border-radius:8px;color:#ef4444"></div>
+    <button type="submit" class="btn btn-primary" id="btnGenerate">Generate Questions</button>
+  </form>
+</div>
+
+<script>
+document.getElementById('interviewDate').min = new Date().toISOString().slice(0, 10);
+(function(){
+  var params = new URLSearchParams(location.search);
+  var prescreenId = params.get('prescreen_id');
+  var el = document.getElementById('prescreenId');
+  if (el && prescreenId) el.value = prescreenId;
+
+  document.getElementById('form').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var prescreenIdVal = document.getElementById('prescreenId').value;
+    if (!prescreenIdVal) {
+      document.getElementById('error').textContent = 'Missing prescreen. Start from the main analysis page.';
+      document.getElementById('error').style.display = 'block';
+      return;
+    }
+    var fd = new FormData(this);
+    fd.set('prescreen_id', prescreenIdVal);
+    var btn = document.getElementById('btnGenerate');
+    btn.disabled = true;
+    try {
+      var r = await fetch('/api/interviews/generate-questions', { method: 'POST', body: fd });
+      var data = await r.json();
+      if (!r.ok) {
+        document.getElementById('error').textContent = data.error || 'Failed to generate questions';
+        document.getElementById('error').style.display = 'block';
+        return;
+      }
+      location.href = '/questions-preview?interview_id=' + encodeURIComponent(data.interview_id);
+    } catch (err) {
+      document.getElementById('error').textContent = err.message || 'Request failed';
+      document.getElementById('error').style.display = 'block';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>
