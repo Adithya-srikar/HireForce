@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../../api/client'
 import { LoadingPage, EmptyState, AtsBar, StatusBadge, Alert, Spinner, Modal } from '../../components/Shared'
+import KnowledgeGraph from '../../components/KnowledgeGraph'
 
 export default function Applicants() {
   const { jobId } = useParams()
@@ -13,6 +14,8 @@ export default function Applicants() {
   const [msg, setMsg] = useState(null)
   const [report, setReport] = useState(null)
   const [reportLoading, setReportLoading] = useState(null)
+  const [graphData, setGraphData] = useState(null)     // { studentName, graph }
+  const [graphLoading, setGraphLoading] = useState(null) // student_id being loaded
 
   useEffect(() => {
     api.recruiter.getApplicants(jobId)
@@ -46,6 +49,16 @@ export default function Applicants() {
     } catch (err) {
       alert(err.message)
     } finally { setReportLoading(null) }
+  }
+
+  async function viewGraph(studentId, studentName) {
+    setGraphLoading(studentId)
+    try {
+      const res = await api.recruiter.getApplicantGraph(studentId)
+      setGraphData({ studentName: res.student_name || studentName, graph: res.graph })
+    } catch (err) {
+      alert(err.message)
+    } finally { setGraphLoading(null) }
   }
 
   if (loading) return <LoadingPage />
@@ -95,6 +108,14 @@ export default function Applicants() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    disabled={graphLoading === a.student.id}
+                    onClick={() => viewGraph(a.student.id, a.student.name)}
+                    title="View knowledge graph"
+                  >
+                    {graphLoading === a.student.id ? <Spinner /> : '🕸 Graph'}
+                  </button>
                   {a.interview_id ? (
                     <button
                       className="btn btn-ghost btn-sm"
@@ -148,6 +169,33 @@ export default function Applicants() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Graph modal */}
+      {graphData && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setGraphData(null)}>
+          <div style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-xl)',
+            padding: 24,
+            width: '100%',
+            maxWidth: 960,
+            maxHeight: '90vh',
+            overflow: 'auto',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 600 }}>Knowledge Graph</h2>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {graphData.studentName} · {graphData.graph?.nodes?.length || 0} nodes · {graphData.graph?.edges?.length || 0} edges
+                </p>
+              </div>
+              <button className="modal-close" style={{ fontSize: 20 }} onClick={() => setGraphData(null)}>✕</button>
+            </div>
+            <KnowledgeGraph graph={graphData.graph} studentName={graphData.studentName} />
+          </div>
+        </div>
       )}
 
       {/* Report modal */}
