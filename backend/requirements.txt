@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+python-dotenv
+httpx
+PyPDF2
+google-genai
+jinja2
+pymongo
+python-jose[cryptography]
+bcrypt
+scikit-learn
+pydantic[email]

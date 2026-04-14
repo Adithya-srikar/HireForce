@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge Graph — HireForce</title>
+  <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#07070d;--surface:#10111a;--surface2:#181a27;--border:#252839;
+      --text:#e4e6f0;--text2:#8b8fa8;--accent:#6366f1;--accent2:#818cf8;
+      --radius:12px;--transition:.25s cubic-bezier(.4,0,.2,1);
+      --red:#ef4444;
+    }
+    html{font-size:15px}
+    body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+
+    header{padding:1.4rem 2rem;display:flex;align-items:center;gap:.8rem;border-bottom:1px solid var(--border);background:rgba(16,17,26,.85);backdrop-filter:blur(12px)}
+    header .logo{font-size:1.35rem;font-weight:700;background:linear-gradient(135deg,var(--accent),#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    header a{color:var(--text2);text-decoration:none;font-size:.85rem;transition:color var(--transition)}
+    header a:hover{color:var(--accent2)}
+    header .spacer{flex:1}
+
+    .container{max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1.25rem}
+    h1{font-size:1.35rem;margin-bottom:.25rem}
+    .sub{color:var(--text2);font-size:.9rem;margin-bottom:1.25rem}
+    .error{display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:.75rem 1rem;color:var(--red);font-size:.9rem;margin-bottom:1rem}
+    #graph-container{width:100%;height:620px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/">Home</a>
+    <div class="logo">HireForce</div>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="container">
+    <h1>Knowledge Graph</h1>
+    <p class="sub">Loads the graph from your `prescreen_results` document.</p>
+
+    <div class="error" id="err"></div>
+
+    <div class="card">
+      <div id="graph-container"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      function $(sel){ return document.querySelector(sel); }
+      function showErr(msg){
+        var el = $('#err');
+        el.textContent = msg;
+        el.style.display = 'block';
+      }
+
+      function renderGraph(graph) {
+        var container = $('#graph-container');
+        if (!container) return;
+        if (!graph || !graph.nodes || !graph.nodes.length) {
+          container.innerHTML = '<p style="padding:2rem;text-align:center;color:var(--text2)">No graph data</p>';
+          return;
+        }
+
+        var colors = {
+          candidate: { background: '#eab308', border: '#ca8a04', font: { color: '#000' } },
+          github:    { background: '#22c55e', border: '#16a34a', font: { color: '#fff' } },
+          leetcode:  { background: '#f97316', border: '#ea580c', font: { color: '#fff' } },
+          linkedin:  { background: '#3b82f6', border: '#2563eb', font: { color: '#fff' } },
+          skill:     { background: '#6366f1', border: '#4f46e5', font: { color: '#fff' } },
+          repo:      { background: '#0ea5e9', border: '#0284c7', font: { color: '#fff' } },
+          topic:     { background: '#14b8a6', border: '#0d9488', font: { color: '#fff' } },
+          stats:     { background: '#64748b', border: '#475569', font: { color: '#fff' } },
+          lc_total:  { background: '#d946ef', border: '#c026d3', font: { color: '#fff' } },
+          lc_easy:   { background: '#84cc16', border: '#65a30d', font: { color: '#fff' } },
+          lc_medium: { background: '#f59e0b', border: '#d97706', font: { color: '#fff' } },
+          lc_hard:   { background: '#ef4444', border: '#b91c1c', font: { color: '#fff' } },
+          experience:{ background: '#8b5cf6', border: '#7c3aed', font: { color: '#fff' } },
+          info:      { background: '#06b6d4', border: '#0891b2', font: { color: '#fff' } },
+        };
+
+        var nodes = new vis.DataSet((graph.nodes || []).map(function(n){
+          var group = n.group;
+          var base = colors[group] || colors.topic;
+          var size = n.size || 14;
+          return Object.assign({}, n, {
+            shape: group === 'candidate' ? 'diamond' : (group === 'repo' ? 'box' : 'dot'),
+            color: base,
+            font: Object.assign({}, (base.font || { color: '#fff' }), { size: Math.max(10, size * 0.7) }),
+          });
+        }));
+
+        var edges = new vis.DataSet((graph.edges || []).map(function(e){
+          return Object.assign({}, e, {
+            color: { color: '#334155', highlight: '#6366f1' },
+            font: { color: '#fff', size: 9, strokeWidth: 0 },
+            smooth: { type: 'continuous' },
+          });
+        }));
+
+        new vis.Network(container, { nodes: nodes, edges: edges }, {
+          physics: { barnesHut: { gravitationalConstant: -4000, springLength: 140 }, stabilization: { iterations: 120 } },
+          interaction: { hover: true, tooltipDelay: 150 },
+          layout: { improvedLayout: true },
+        });
+      }
+
+      var params = new URLSearchParams(location.search);
+      var prescreenId = params.get('prescreen_id');
+      if (!prescreenId) {
+        showErr('Missing prescreen_id. Open this page like: /knowledge-graph?prescreen_id=YOUR_ID');
+        return;
+      }
+
+      fetch('/api/knowledge-graph/' + encodeURIComponent(prescreenId))
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          if (!data || data.error) {
+            showErr((data && data.error) ? data.error : 'Failed to load graph');
+            return;
+          }
+          renderGraph(data.graph);
+        })
+        .catch(function(){
+          showErr('Failed to load graph');
+        });
+    })();
+  </script>
+</body>
+</html>
+

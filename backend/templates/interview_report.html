@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interview Report — HireForce</title>
+<script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07070d;--surface:#10111a;--surface2:#181a27;--border:#252839;
+  --text:#e4e6f0;--text2:#8b8fa8;--accent:#6366f1;--accent2:#818cf8;
+  --green:#22c55e;--red:#ef4444;--yellow:#eab308;--radius:12px;--transition:.25s cubic-bezier(.4,0,.2,1);
+}
+html{font-size:15px}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+
+header{padding:1.4rem 2rem;display:flex;align-items:center;gap:.8rem;border-bottom:1px solid var(--border);background:rgba(16,17,26,.85);backdrop-filter:blur(12px)}
+header .logo{font-size:1.35rem;font-weight:700;background:linear-gradient(135deg,var(--accent),#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+header .spacer{flex:1}
+header a{color:var(--text2);text-decoration:none;font-size:.85rem}
+header a:hover{color:var(--accent2)}
+
+.container{max-width:720px;margin:0 auto;padding:2rem 1.5rem}
+h1{font-size:1.5rem;margin-bottom:.5rem}
+.sub{color:var(--text2);font-size:.9rem;margin-bottom:1.5rem}
+
+.verdict{text-align:center;padding:2rem;border-radius:var(--radius);margin-bottom:2rem;border:2px solid}
+.verdict.fit{background:rgba(34,197,94,.08);border-color:var(--green)}
+.verdict.unfit{background:rgba(239,68,68,.08);border-color:var(--red)}
+.verdict .label{font-size:.8rem;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem}
+.verdict.fit .label{color:var(--green)}
+.verdict.unfit .label{color:var(--red)}
+.verdict .title{font-size:1.75rem;font-weight:700}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:1.5rem}
+.card h2{font-size:1.1rem;margin-bottom:1rem}
+.card p,.card ul{font-size:.9rem;color:var(--text2);margin-bottom:.5rem}
+.card ul{margin-left:1.25rem}
+
+#report-graph-container{width:100%;height:520px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+
+.recording-note{display:flex;align-items:center;gap:.5rem;font-size:.85rem;color:var(--text2);margin-top:1rem;padding:.75rem;background:var(--surface2);border-radius:8px}
+.recording-note::before{content:"🔊";font-size:1.2rem}
+
+.btn{display:inline-flex;align-items:center;gap:.5rem;padding:.75rem 1.5rem;border:none;border-radius:var(--radius);font-size:.95rem;font-weight:600;cursor:pointer;text-decoration:none;background:var(--surface2);color:var(--text);border:1px solid var(--border);margin-top:.5rem}
+.btn:hover{border-color:var(--accent);color:var(--accent2)}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/">Home</a>
+  <div class="logo">HireForce</div>
+  <div class="spacer"></div>
+</header>
+
+<div class="container">
+  <h1>Interview Report</h1>
+  <p class="sub" id="subTitle">Summary from Prescreen → Question Generator → Interviewer → Summariser → Report.</p>
+
+  <div class="card verdict fit" id="verdict">
+    <div class="label">Verdict</div>
+    <div class="title" id="verdictTitle">Fit</div>
+    <p style="margin-top:.5rem;font-size:.9rem;color:var(--text2)" id="verdictP">Candidate meets the bar. Proceed to next round.</p>
+  </div>
+
+  <div class="card" id="summaryCard">
+    <h2>Summary</h2>
+    <div id="summaryContent">
+      <p>Overall assessment, technical depth, and behavioural alignment (from summariser agent).</p>
+      <ul id="summaryList"></ul>
+    </div>
+  </div>
+
+  <div class="card" id="scoresCard">
+    <h2>Scores</h2>
+    <p id="scoresContent">Technical, communication, problem-solving, code quality — stored in DB.</p>
+  </div>
+
+  <div class="card" id="prescreenCard" style="display:none">
+    <h2>Prescreen Context</h2>
+    <p style="margin-bottom:.75rem">Loaded from the prescreen linked to this report.</p>
+    <div id="prescreenContent"></div>
+  </div>
+
+  <div class="card" id="graphCard" style="display:none">
+    <h2>Knowledge Graph</h2>
+    <p style="margin-bottom:.75rem">Graph stored on the prescreen record.</p>
+    <div id="report-graph-container"></div>
+  </div>
+
+  <div class="recording-note" id="recordingNote">
+    Recording and full report have been saved to the database.
+  </div>
+
+  <a href="/" class="btn">Back to PreScreen</a>
+</div>
+
+<script>
+(function(){
+  function renderGraph(graph) {
+    var container = document.getElementById('report-graph-container');
+    if (!container) return;
+    if (!graph || !graph.nodes || !graph.nodes.length) {
+      container.innerHTML = '<p style="padding:2rem;text-align:center;color:var(--text2)">No graph data</p>';
+      return;
+    }
+
+    var colors = {
+      candidate: { background: '#eab308', border: '#ca8a04', font: { color: '#000' } },
+      github:    { background: '#22c55e', border: '#16a34a', font: { color: '#fff' } },
+      leetcode:  { background: '#f97316', border: '#ea580c', font: { color: '#fff' } },
+      linkedin:  { background: '#3b82f6', border: '#2563eb', font: { color: '#fff' } },
+      skill:     { background: '#6366f1', border: '#4f46e5', font: { color: '#fff' } },
+      repo:      { background: '#0ea5e9', border: '#0284c7', font: { color: '#fff' } },
+      topic:     { background: '#14b8a6', border: '#0d9488', font: { color: '#fff' } },
+      stats:     { background: '#64748b', border: '#475569', font: { color: '#fff' } },
+      lc_total:  { background: '#d946ef', border: '#c026d3', font: { color: '#fff' } },
+      lc_easy:   { background: '#84cc16', border: '#65a30d', font: { color: '#fff' } },
+      lc_medium: { background: '#f59e0b', border: '#d97706', font: { color: '#fff' } },
+      lc_hard:   { background: '#ef4444', border: '#b91c1c', font: { color: '#fff' } },
+      experience:{ background: '#8b5cf6', border: '#7c3aed', font: { color: '#fff' } },
+      info:      { background: '#06b6d4', border: '#0891b2', font: { color: '#fff' } },
+    };
+
+    var nodes = new vis.DataSet((graph.nodes || []).map(function(n){
+      var group = n.group;
+      var base = colors[group] || colors.topic;
+      var size = n.size || 14;
+      return Object.assign({}, n, {
+        shape: group === 'candidate' ? 'diamond' : (group === 'repo' ? 'box' : 'dot'),
+        color: base,
+        font: Object.assign({}, (base.font || { color: '#fff' }), { size: Math.max(10, size * 0.7) }),
+      });
+    }));
+
+    var edges = new vis.DataSet((graph.edges || []).map(function(e){
+      return Object.assign({}, e, {
+        color: { color: '#334155', highlight: '#6366f1' },
+        font: { color: '#fff', size: 9, strokeWidth: 0 },
+        smooth: { type: 'continuous' },
+      });
+    }));
+
+    new vis.Network(container, { nodes: nodes, edges: edges }, {
+      physics: { barnesHut: { gravitationalConstant: -4000, springLength: 140 }, stabilization: { iterations: 120 } },
+      interaction: { hover: true, tooltipDelay: 150 },
+      layout: { improvedLayout: true },
+    });
+  }
+
+  var params = new URLSearchParams(location.search);
+  var reportId = params.get('report_id');
+  if (!reportId) {
+    if (params.get('verdict') === 'unfit') {
+      var v = document.getElementById('verdict');
+      v.className = 'card verdict unfit';
+      document.getElementById('verdictTitle').textContent = 'Unfit';
+      document.getElementById('verdictP').textContent = 'Candidate does not meet the bar for this role.';
+    }
+    return;
+  }
+  fetch('/api/reports/' + encodeURIComponent(reportId))
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.error) return;
+      var verdict = (data.verdict || 'unfit').toLowerCase();
+      var v = document.getElementById('verdict');
+      v.className = 'card verdict ' + (verdict === 'fit' ? 'fit' : 'unfit');
+      document.getElementById('verdictTitle').textContent = verdict === 'fit' ? 'Fit' : 'Unfit';
+      document.getElementById('verdictP').textContent = verdict === 'fit' ? 'Candidate meets the bar. Proceed to next round.' : 'Candidate does not meet the bar for this role.';
+      var summary = data.summary || {};
+      document.getElementById('summaryContent').innerHTML = '<p>' + (summary.summary || '').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</p>' +
+        (summary.technical_depth ? '<p style="margin-top:.5rem">' + summary.technical_depth.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</p>' : '') +
+        (summary.strengths && summary.strengths.length ? '<ul><li>' + summary.strengths.join('</li><li>') + '</li></ul>' : '') +
+        (summary.weaknesses && summary.weaknesses.length ? '<p style="margin-top:.5rem">Areas of concern:</p><ul><li>' + summary.weaknesses.join('</li><li>') + '</li></ul>' : '');
+      var scores = summary.scores || {};
+      var scoreStr = ['Technical: ' + (scores.technical ?? '-'), 'Communication: ' + (scores.communication ?? '-'), 'Problem solving: ' + (scores.problem_solving ?? '-'), 'Code quality: ' + (scores.code_quality ?? '-'), 'Overall: ' + (scores.overall ?? '-')].join(' · ');
+      document.getElementById('scoresContent').textContent = scoreStr;
+      if (data.report_text) document.getElementById('summaryContent').innerHTML += '<div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);white-space:pre-wrap">' + (data.report_text || '').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
+
+      // Load prescreen context for this report
+      fetch('/api/reports/' + encodeURIComponent(reportId) + '/prescreen')
+        .then(function(r){ return r.json(); })
+        .then(function(ctx){
+          if (ctx && !ctx.error && ctx.prescreen) {
+            var card = document.getElementById('prescreenCard');
+            var prescreen = ctx.prescreen || {};
+            var analysis = prescreen.analysis || {};
+            var urls = prescreen.urls || {};
+
+            var esc = function(s){ return String(s ?? '').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+            var links = [];
+            if (urls.github) links.push('<a href="' + esc(urls.github) + '" target="_blank">GitHub</a>');
+            if (urls.leetcode) links.push('<a href="' + esc(urls.leetcode) + '" target="_blank">LeetCode</a>');
+            if (urls.linkedin) links.push('<a href="' + esc(urls.linkedin) + '" target="_blank">LinkedIn</a>');
+
+            var html = '';
+            if (links.length) html += '<p style="margin-bottom:.5rem">' + links.join(' · ') + '</p>';
+            if (analysis.overall_assessment) html += '<p><strong style="color:var(--text)">Overall:</strong> ' + esc(analysis.overall_assessment) + '</p>';
+            if (analysis.technical_depth) html += '<p style="margin-top:.5rem"><strong style="color:var(--text)">Technical:</strong> ' + esc(analysis.technical_depth) + '</p>';
+            if (analysis.strengths && analysis.strengths.length) html += '<p style="margin-top:.75rem"><strong style="color:var(--text)">Strengths:</strong></p><ul><li>' + analysis.strengths.map(esc).join('</li><li>') + '</li></ul>';
+            if (analysis.areas_to_explore && analysis.areas_to_explore.length) html += '<p style="margin-top:.75rem"><strong style="color:var(--text)">Areas to explore:</strong></p><ul><li>' + analysis.areas_to_explore.map(esc).join('</li><li>') + '</li></ul>';
+            if (!html) html = '<p style="color:var(--text2)">No prescreen analysis available.</p>';
+
+            document.getElementById('prescreenContent').innerHTML = html;
+            card.style.display = '';
+
+            // Render knowledge graph stored on the prescreen record
+            if (prescreen.graph) {
+              var graphCard = document.getElementById('graphCard');
+              graphCard.style.display = '';
+              renderGraph(prescreen.graph);
+            }
+          }
+        })
+        .catch(function(){});
+    })
+    .catch(function(){});
+})();
+</script>
+</body>
+</html>
