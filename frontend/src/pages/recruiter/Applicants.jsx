@@ -14,8 +14,11 @@ export default function Applicants() {
   const [msg, setMsg] = useState(null)
   const [report, setReport] = useState(null)
   const [reportLoading, setReportLoading] = useState(null)
-  const [graphData, setGraphData] = useState(null)     // { studentName, graph }
-  const [graphLoading, setGraphLoading] = useState(null) // student_id being loaded
+  const [graphData, setGraphData] = useState(null)
+  const [graphLoading, setGraphLoading] = useState(null)
+  const [interviewLink, setInterviewLink] = useState(null) // shown if email not sent
+  const [resending, setResending] = useState(null) // application_id being resent
+  const [copied, setCopied] = useState(null)       // interview_id just copied
 
   useEffect(() => {
     api.recruiter.getApplicants(jobId)
@@ -31,14 +34,40 @@ export default function Applicants() {
         date: schedForm.date,
         time: schedForm.time,
       })
-      setMsg({ type: 'success', text: `Interview scheduled! Link: ${res.interview_link}` })
+      const baseMsg = res.email_sent
+        ? `✓ Interview scheduled! Invite sent to ${res.candidate_email}`
+        : `✓ Interview scheduled! Copy the link below to share with the candidate (SMTP not configured).`
+      setMsg({ type: 'success', text: baseMsg })
+      if (!res.email_sent) setInterviewLink(res.interview_link)
       setScheduling(null)
-      // refresh
       const updated = await api.recruiter.getApplicants(jobId)
       setApplicants(updated || [])
     } catch (err) {
       setMsg({ type: 'error', text: err.message })
     } finally { setBusy(false) }
+  }
+
+  function copyLink(interview_id) {
+    const link = `${window.location.origin}/interview/${interview_id}`
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied(interview_id)
+      setTimeout(() => setCopied(null), 2000)
+    })
+  }
+
+  async function resendInvite(application_id) {
+    const app = applicants.find(a => a.application_id === application_id)
+    setResending(application_id)
+    try {
+      const res = await api.recruiter.resendInvite(jobId, application_id)
+      const text = res.email_sent
+        ? `✓ Invite resent to ${res.candidate_email}`
+        : `Email not sent (SMTP not configured). Link copied to clipboard.`
+      if (!res.email_sent) navigator.clipboard.writeText(res.interview_link).catch(() => {})
+      setMsg({ type: res.email_sent ? 'success' : 'error', text })
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally { setResending(null) }
   }
 
   async function viewReport(interview_id) {
@@ -71,6 +100,16 @@ export default function Applicants() {
       </div>
 
       {msg && <Alert type={msg.type}>{msg.text}</Alert>}
+
+      {interviewLink && (
+        <div style={{ background: 'rgba(124,92,252,0.08)', border: '1px solid rgba(124,92,252,0.25)', borderRadius: 'var(--radius-lg)', padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>🔗 Interview link:</span>
+          <code style={{ fontSize: 12, color: 'var(--accent-light)', wordBreak: 'break-all', flex: 3 }}>{interviewLink}</code>
+          <button className="btn btn-ghost btn-sm" onClick={() => { navigator.clipboard.writeText(interviewLink); }}>📋 Copy</button>
+          <a className="btn btn-primary btn-sm" href={interviewLink} target="_blank" rel="noreferrer">Open ↗</a>
+          <button className="btn btn-ghost btn-sm" onClick={() => setInterviewLink(null)}>✕</button>
+        </div>
+      )}
 
       {applicants.length === 0 ? (
         <div className="card"><EmptyState icon="👥" title="No applicants yet" desc="Candidates will appear here once they apply." /></div>
@@ -117,13 +156,37 @@ export default function Applicants() {
                     {graphLoading === a.student.id ? <Spinner /> : '🕸 Graph'}
                   </button>
                   {a.interview_id ? (
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      disabled={reportLoading === a.interview_id}
-                      onClick={() => viewReport(a.interview_id)}
-                    >
-                      {reportLoading === a.interview_id ? <Spinner /> : 'View Report'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => copyLink(a.interview_id)}
+                        title="Copy interview link to clipboard"
+                      >
+                        {copied === a.interview_id ? '✓ Copied' : '🔗 Copy Link'}
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        disabled={resending === a.application_id}
+                        onClick={() => resendInvite(a.application_id)}
+                        title="Resend email invite"
+                      >
+                        {resending === a.application_id ? <Spinner /> : '✉ Resend'}
+                      </button>
+                      <a
+                        href={`/interview/${a.interview_id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-ghost btn-sm"
+                        title="Open interview room"
+                      >🎤 Interview</a>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        disabled={reportLoading === a.interview_id}
+                        onClick={() => viewReport(a.interview_id)}
+                      >
+                        {reportLoading === a.interview_id ? <Spinner /> : '📄 Report'}
+                      </button>
+                    </div>
                   ) : (
                     <button
                       className="btn btn-primary btn-sm"

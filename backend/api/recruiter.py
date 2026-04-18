@@ -3,6 +3,8 @@ Recruiter API routes.
 
 All routes require a valid recruiter JWT (Authorization: Bearer <token>).
 """
+import asyncio
+import logging
 import os
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -29,6 +31,9 @@ from services.email_service import send_interview_invite
 recruiter_router = APIRouter(prefix="/recruiter", tags=["recruiter"])
 
 _APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
+_FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+logger = logging.getLogger(__name__)
 
 
 # ── Job management ────────────────────────────────────────────
@@ -153,32 +158,107 @@ async def schedule_interview(
 
     # Create interview record
     prescreen_id = student.get("prescreen_id") or ""
+    job_description = f"{job.get('title', '')} – {job.get('description', '')} {job.get('requirements', '')}"
+
     interview_id = create_interview(
         prescreen_id=prescreen_id,
-        job_description=f"{job.get('title', '')} – {job.get('description', '')}",
+        job_description=job_description,
         interview_date=interview_date,
         interview_time=interview_time,
     )
+
+    # Generate AI questions in the background so they're ready when the candidate starts
+    async def _generate():
+        try:
+            from orchestration.pipeline import generate_questions_for_interview
+            await generate_questions_for_interview(
+                prescreen_id=prescreen_id,
+                job_description=job_description,
+                interview_date=interview_date,
+                interview_time=interview_time,
+            )
+        except Exception as e:
+            logger.warning(f"Question generation failed for interview {interview_id}: {e}")
+
+    asyncio.create_task(_generate())
 
     # Update application status
     update_application_status(application_id, "interview_scheduled", interview_id=interview_id)
 
-    # Build interview link and send email
-    interview_link = f"{_APP_BASE_URL}/take-interview?interview_id={interview_id}"
-    send_interview_invite(
-        candidate_name=student.get("name", "Candidate"),
-        candidate_email=student["email"],
-        job_title=job.get("title", "the role"),
-        interview_date=interview_date,
-        interview_time=interview_time,
-        interview_link=interview_link,
-    )
+    # Build interview link (frontend URL so the student can open it)
+    interview_link = f"{_FRONTEND_URL}/interview/{interview_id}"
+
+    # Send email invite – non-fatal if SMTP is not configured
+    email_sent = False
+    try:
+        send_interview_invite(
+            candidate_name=student.get("name", "Candidate"),
+            candidate_email=student["email"],
+            job_title=job.get("title", "the role"),
+            interview_date=interview_date,
+            interview_time=interview_time,
+            interview_link=interview_link,
+        )
+        email_sent = True
+    except Exception as e:
+        logger.warning(f"Email invite failed (non-fatal): {e}")
 
     return {
-        "message": "Interview scheduled and invite sent",
+        "message": "Interview scheduled" + (" and invite sent" if email_sent else " (email not sent – check SMTP config)"),
         "interview_id": interview_id,
         "interview_link": interview_link,
         "candidate_email": student["email"],
+        "email_sent": email_sent,
+    }
+
+
+@recruiter_router.post("/jobs/{job_id}/applicants/{application_id}/resend-invite")
+async def resend_invite(
+    job_id: str,
+    application_id: str,
+    user: dict = Depends(require_recruiter),
+):
+    """Resend (or return) the interview invite link for an already-scheduled candidate."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job["recruiter_id"] != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    app = get_application(application_id)
+    if not app or app["job_id"] != job_id:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    interview_id = app.get("interview_id")
+    if not interview_id:
+        raise HTTPException(status_code=400, detail="No interview scheduled for this applicant yet")
+
+    student = get_user_by_id(app["student_id"])
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    interview = get_interview(interview_id)
+    interview_link = f"{_FRONTEND_URL}/interview/{interview_id}"
+
+    email_sent = False
+    try:
+        send_interview_invite(
+            candidate_name=student.get("name", "Candidate"),
+            candidate_email=student["email"],
+            job_title=job.get("title", "the role"),
+            interview_date=interview.get("interview_date", "") if interview else "",
+            interview_time=interview.get("interview_time", "") if interview else "",
+            interview_link=interview_link,
+        )
+        email_sent = True
+    except Exception as e:
+        logger.warning(f"Resend email failed (non-fatal): {e}")
+
+    return {
+        "interview_id": interview_id,
+        "interview_link": interview_link,
+        "candidate_email": student["email"],
+        "email_sent": email_sent,
     }
 
 

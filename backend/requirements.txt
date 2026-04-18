@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
 python-dotenv
 httpx
@@ -11,3 +11,7 @@ python-jose[cryptography]
 bcrypt
 scikit-learn
 pydantic[email]
+# Voice interview
+faster-whisper
+edge-tts
+numpy

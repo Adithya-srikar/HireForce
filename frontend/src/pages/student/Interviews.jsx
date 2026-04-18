@@ -42,7 +42,7 @@ export default function StudentInterviews() {
                     </div>
                   </div>
                   <a
-                    href={`/take-interview?interview_id=${iv._id}`}
+                    href={`/interview/${iv.session_id || iv._id}`}
                     className="btn btn-primary btn-sm"
                     style={{ pointerEvents: iv.questions?.length ? 'auto' : 'none', opacity: iv.questions?.length ? 1 : 0.45 }}
                   >

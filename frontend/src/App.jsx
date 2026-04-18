@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar'
 
 // Pages
 import AuthPage from './pages/AuthPage'
+import Interview from './pages/student/Interview'
 import StudentDashboard from './pages/student/Dashboard'
 import StudentProfile from './pages/student/Profile'
 import StudentJobs from './pages/student/Jobs'
@@ -62,6 +63,12 @@ export default function App() {
         <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<AuthGate><AuthPage /></AuthGate>} />
 
+        {/* Full-screen interview – no sidebar */}
+        <Route
+          path="/interview/:interviewId"
+          element={<ProtectedFullscreen><Interview /></ProtectedFullscreen>}
+        />
+
         <Route path="/student/*" element={<ProtectedLayout role="student" />} />
         <Route path="/recruiter/*" element={<ProtectedLayout role="recruiter" />} />
 
@@ -76,5 +83,13 @@ function AuthGate({ children }) {
   const { user, loading } = useAuth()
   if (loading) return null
   if (user) return <Navigate to={user.role === 'recruiter' ? '/recruiter/dashboard' : '/student/dashboard'} replace />
+  return children
+}
+
+// Full-screen route with auth but no sidebar
+function ProtectedFullscreen({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  if (!user) return <Navigate to="/login" replace />
   return children
 }

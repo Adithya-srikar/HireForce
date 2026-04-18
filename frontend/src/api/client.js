@@ -78,5 +78,6 @@ export const api = {
       req('POST', `/recruiter/jobs/${jobId}/applicants/${appId}/schedule?interview_date=${params.date}&interview_time=${params.time}`),
     getApplicantGraph: (studentId) => req('GET', `/recruiter/applicants/${studentId}/graph`),
     getReport: (interviewId) => req('GET', `/recruiter/interviews/${interviewId}/report`),
+    resendInvite: (jobId, appId) => req('POST', `/recruiter/jobs/${jobId}/applicants/${appId}/resend-invite`),
   },
 }

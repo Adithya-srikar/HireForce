@@ -18,6 +18,7 @@ export default defineConfig({
       '/auth':      { target: 'http://localhost:8000', bypass: bypassHtmlNav },
       '/student':   { target: 'http://localhost:8000', bypass: bypassHtmlNav },
       '/recruiter': { target: 'http://localhost:8000', bypass: bypassHtmlNav },
+      '/ws':        { target: 'ws://localhost:8000', ws: true, changeOrigin: true },
     }
   }
 })

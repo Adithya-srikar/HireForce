@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from config.db import get_db
 from fastapi import FastAPI, UploadFile, File, Form, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
@@ -16,6 +17,7 @@ from services.resume_parser import (
 from api.auth import auth_router
 from api.student import student_router
 from api.recruiter import recruiter_router
+from api.ws_interview import ws_router
 from services.github_service import fetch_github_profile
 from services.leetcode_service import fetch_leetcode_profile
 from services.linkedin_service import fetch_linkedin_profile
@@ -31,12 +33,30 @@ from orchestration import (
 )
 from repositories.report_repo import get_report
 
+async def _warm_stt():
+    """Load Whisper model in background so the first interview request is instant."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    from services.stt_service import warm_up
+    await loop.run_in_executor(None, warm_up)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     get_db()  # verify connection on startup
+    asyncio.create_task(_warm_stt())  # load Whisper model without blocking startup
     yield
 
-app = FastAPI(title="HireForce PreScreen", lifespan=lifespan)
+app = FastAPI(title="HireForce", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 templates = Jinja2Templates(directory="templates")
 
 
@@ -47,6 +67,9 @@ async def index(request: Request):
 app.include_router(auth_router)
 app.include_router(student_router)
 app.include_router(recruiter_router)
+app.include_router(ws_router)
+
+
 @app.get("/paste-job-interview", response_class=HTMLResponse)
 async def paste_job_interview(request: Request):
     return templates.TemplateResponse("paste_job_interview.html", {"request": request})
